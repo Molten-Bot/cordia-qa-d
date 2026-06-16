@@ -3,12 +3,12 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="light dark">
+    <meta name="color-scheme" content="light">
     <meta
       name="description"
-      content="A small browser-only web application template ready for static hosting."
+      content="Dat Dolphin is a fast browser arcade game with a global score table."
     >
-    <title>Cordia App Template</title>
+    <title>Dat Dolphin</title>
     <link rel="author" href="/humans.txt" type="text/plain">
     <link rel="alternate" href="/llm.txt" type="text/plain" title="LLM-readable site information">
     <link rel="stylesheet" href="/global.css">
@@ -21,124 +21,72 @@
     <div class="app-shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">Browser app template</p>
-          <h1>Cordia</h1>
+          <p class="eyebrow">Arcade swim</p>
+          <h1>Dat Dolphin</h1>
         </div>
         <nav class="nav" aria-label="Primary">
-          <a href="#overview" aria-current="page">Overview</a>
-          <a href="#workspace">Workspace</a>
-          <a href="#settings">Settings</a>
+          <a href="#play" aria-current="page">Play</a>
+          <a href="#scores">Scores</a>
         </nav>
       </header>
 
-      <main id="main">
-        <section class="hero" id="overview" aria-labelledby="hero-title">
-          <div class="hero-copy">
-            <p class="eyebrow">Static hosting ready starter</p>
-            <h2 id="hero-title">A clean starting point for browser-only apps.</h2>
-            <p>
-              Customize the data model, views, and actions without introducing a
-              build pipeline. State is local by default, markup stays plain, and
-              assets live in one deployable folder.
-            </p>
-            <div class="hero-actions">
-              <a class="button primary" href="#workspace">Open workspace</a>
-              <a class="button secondary" href="#settings">Edit settings</a>
-            </div>
-          </div>
-          <div class="status-panel" aria-label="Application status">
+      <main id="main" class="game-layout">
+        <section class="play-stage" id="play" aria-labelledby="play-title">
+          <div class="stage-header">
             <div>
-              <span class="status-dot" aria-hidden="true"></span>
-              <span>Ready for customization</span>
+              <p class="eyebrow">Run</p>
+              <h2 id="play-title">Tap. Flap. Clear pipes.</h2>
             </div>
-            <strong id="item-count">0</strong>
-            <span>saved items</span>
-          </div>
-        </section>
-
-        <section class="section-grid" id="workspace" aria-labelledby="workspace-title">
-          <div class="panel workspace-panel">
-            <div class="section-heading">
+            <div class="score-strip" aria-label="Current run scores">
               <div>
-                <p class="eyebrow">Workspace</p>
-                <h2 id="workspace-title">Starter list</h2>
+                <span>Score</span>
+                <strong id="score">0</strong>
               </div>
-              <button class="button secondary" id="clear-items" type="button">Clear done</button>
+              <div>
+                <span>Best</span>
+                <strong id="best-score">0</strong>
+              </div>
             </div>
-
-            <form class="item-form" id="item-form">
-              <label for="item-input">New item</label>
-              <div class="input-row">
-                <input
-                  id="item-input"
-                  name="item"
-                  type="text"
-                  autocomplete="off"
-                  maxlength="80"
-                  placeholder="Add a task, note, or placeholder record"
-                  required
-                >
-                <button class="button primary" type="submit">Add</button>
-              </div>
-            </form>
-
-            <ul class="item-list" id="item-list" aria-live="polite"></ul>
           </div>
 
-          <aside class="panel" aria-labelledby="snapshot-title">
-            <p class="eyebrow">Snapshot</p>
-            <h2 id="snapshot-title">Template pieces</h2>
-            <dl class="stat-list">
-              <div>
-                <dt>Runtime</dt>
-                <dd>Browser only</dd>
-              </div>
-              <div>
-                <dt>Deploy folder</dt>
-                <dd><code>public</code></dd>
-              </div>
-              <div>
-                <dt>Styles</dt>
-                <dd><code>global.css</code></dd>
-              </div>
-              <div>
-                <dt>Script</dt>
-                <dd><code>app.js</code></dd>
-              </div>
-            </dl>
-          </aside>
+          <canvas
+            id="game-canvas"
+            width="480"
+            height="640"
+            aria-label="Dat Dolphin game area"
+          ></canvas>
+
+          <form class="player-bar" id="player-form">
+            <label for="player-name">Name</label>
+            <input
+              id="player-name"
+              name="name"
+              type="text"
+              autocomplete="nickname"
+              maxlength="18"
+              value="Dolphin"
+              required
+            >
+            <button id="start-game" type="submit">Start</button>
+          </form>
+          <p class="status-line" id="game-status" role="status">Ready</p>
         </section>
 
-        <section class="panel settings-panel" id="settings" aria-labelledby="settings-title">
-          <div class="section-heading">
+        <aside class="scores-panel" id="scores" aria-labelledby="scores-title">
+          <div class="panel-heading">
             <div>
-              <p class="eyebrow">Settings</p>
-              <h2 id="settings-title">App preferences</h2>
+              <p class="eyebrow">Global</p>
+              <h2 id="scores-title">Scoreboard</h2>
             </div>
-            <span class="save-state" id="save-state" role="status">Saved locally</span>
+            <span id="leaderboard-status">Loading scores</span>
           </div>
-
-          <div class="settings-grid">
-            <label class="field">
-              <span>App name</span>
-              <input id="app-name" type="text" maxlength="32" value="Cordia">
-            </label>
-
-            <label class="field">
-              <span>Theme</span>
-              <select id="theme-select">
-                <option value="system">System</option>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </select>
-            </label>
-          </div>
-        </section>
+          <ol class="leaderboard" id="leaderboard" aria-live="polite"></ol>
+        </aside>
       </main>
 
       <footer class="site-footer">
         <span>Created by <a href="https://cordia.molten.bot">cordia.molten.bot</a>.</span>
-        <a href="https://molten.bot">molten.bot</a>
+        <a href="/release.json">Release 0</a>
       </footer>
     </div>
   </body>

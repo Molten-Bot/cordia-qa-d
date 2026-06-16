@@ -3,65 +3,35 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
-  addItem,
-  clearDoneItems,
-  createDefaultState,
-  parseStoredState,
-  removeItem,
-  updateItem,
+  normalizeLeaderboard,
+  normalizeScore,
+  sanitizePlayerName,
 } from "../public/app.js";
 
-test("createDefaultState uses supplied id factory", () => {
-  let nextId = 1;
-  const state = createDefaultState(() => `item-${nextId++}`);
+test("sanitizePlayerName trims whitespace and supplies fallback", () => {
+  assert.equal(sanitizePlayerName("  Ace   Fin  "), "Ace Fin");
+  assert.equal(sanitizePlayerName(" "), "Dolphin");
+  assert.equal(sanitizePlayerName("Long Dolphin Name Beyond Limit"), "Long Dolphin Name");
+});
+
+test("normalizeScore clamps to public score range", () => {
+  assert.equal(normalizeScore(12.8), 12);
+  assert.equal(normalizeScore(-4), 0);
+  assert.equal(normalizeScore("10050"), 9999);
+  assert.equal(normalizeScore("nope"), 0);
+});
+
+test("normalizeLeaderboard filters invalid entries and sorts high scores first", () => {
+  const scores = normalizeLeaderboard([
+    { id: "low", name: "Low", score: 2, createdAt: "2026-01-03T00:00:00.000Z" },
+    { id: "bad", name: "Bad", score: "9", createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "high", name: "High", score: 8, createdAt: "2026-01-02T00:00:00.000Z" },
+    { id: "tie", name: "Tie", score: 8, createdAt: "2026-01-01T00:00:00.000Z" },
+  ]);
 
   assert.deepEqual(
-    state.items.map((item) => item.id),
-    ["item-1", "item-2", "item-3"],
-  );
-});
-
-test("parseStoredState merges valid stored values with defaults", () => {
-  const defaultState = createDefaultState(() => "default-id");
-  const stored = JSON.stringify({
-    appName: "Typed Cordia",
-    theme: "dark",
-    items: [{ id: "stored-id", text: "Stored item", done: true }],
-  });
-
-  assert.deepEqual(parseStoredState(stored, defaultState), {
-    appName: "Typed Cordia",
-    theme: "dark",
-    items: [{ id: "stored-id", text: "Stored item", done: true }],
-  });
-});
-
-test("parseStoredState falls back when stored JSON is invalid", () => {
-  const defaultState = createDefaultState(() => "default-id");
-
-  assert.equal(parseStoredState("{", defaultState), defaultState);
-});
-
-test("item reducers add, update, remove, and clear items immutably", () => {
-  const state = {
-    appName: "Cordia",
-    theme: "system",
-    items: [
-      { id: "one", text: "One", done: false },
-      { id: "two", text: "Two", done: true },
-    ],
-  };
-
-  const added = addItem(state, "Three", () => "three");
-  const updated = updateItem(added, "one", { done: true });
-  const removed = removeItem(updated, "two");
-  const cleared = clearDoneItems(removed);
-
-  assert.deepEqual(added.items[0], { id: "three", text: "Three", done: false });
-  assert.equal(state.items[0].done, false);
-  assert.deepEqual(
-    cleared.items,
-    [{ id: "three", text: "Three", done: false }],
+    scores.map((entry) => entry.id),
+    ["tie", "high", "low"],
   );
 });
 

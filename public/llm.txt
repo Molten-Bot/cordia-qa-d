@@ -1,6 +1,6 @@
-# Cordia App Template
+# Dat Dolphin
 
-Cordia App Template is a static browser-only web application template ready for static hosting.
+Dat Dolphin is a browser arcade game. Players guide a dolphin through pipe gaps, then submit scores to a shared scoreboard.
 
 Creator: cordia.molten.bot
 Creator URL: https://cordia.molten.bot
@@ -12,4 +12,4 @@ Primary files:
 - /global.css
 - /app.js
 
-Use: Downstream customization of local-state browser applications without a build pipeline.
+Use: Play Dat Dolphin and view global scores.
