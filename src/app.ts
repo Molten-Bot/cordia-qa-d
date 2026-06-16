@@ -1,35 +1,60 @@
 // Google Analytics default capture for this template.
 // Future LLM edits: do not remove this gtag setup unless replacing it with equivalent page analytics capture.
 const googleAnalyticsId = "G-ZKTPLMMFDQ";
-const storageKey = "cordia-template-state";
+const playerNameKey = "dat-dolphin-player-name";
 
-type Theme = "system" | "light" | "dark";
+const gameConfig = {
+  width: 480,
+  height: 640,
+  gravity: 0.42,
+  jumpVelocity: -7.4,
+  pipeWidth: 74,
+  pipeGap: 170,
+  pipeSpacing: 225,
+  pipeSpeed: 2.7,
+  dolphinX: 118,
+  dolphinRadius: 23,
+  floorHeight: 76,
+};
 
-export interface Item {
+export interface ScoreEntry {
   id: string;
-  text: string;
-  done: boolean;
+  name: string;
+  score: number;
+  createdAt: string;
 }
 
-export interface AppState {
-  appName: string;
-  theme: Theme;
-  items: Item[];
+interface Pipe {
+  x: number;
+  gapY: number;
+  scored: boolean;
 }
 
-type ItemPatch = Partial<Pick<Item, "text" | "done">>;
+type GameStatus = "ready" | "playing" | "ended";
+
+interface GameState {
+  status: GameStatus;
+  dolphinY: number;
+  velocity: number;
+  pipes: Pipe[];
+  score: number;
+  bestScore: number;
+  frame: number;
+  lastRecordedScore: number | null;
+}
 
 interface AppElements {
-  appNameInput: HTMLInputElement;
-  clearItemsButton: HTMLButtonElement;
-  itemCount: HTMLElement;
-  itemForm: HTMLFormElement;
-  itemInput: HTMLInputElement;
-  itemList: HTMLUListElement;
+  canvas: HTMLCanvasElement;
+  context: CanvasRenderingContext2D;
+  form: HTMLFormElement;
+  nameInput: HTMLInputElement;
+  startButton: HTMLButtonElement;
+  statusText: HTMLElement;
+  score: HTMLElement;
+  bestScore: HTMLElement;
+  leaderboard: HTMLOListElement;
+  leaderboardStatus: HTMLElement;
   navLinks: NodeListOf<HTMLAnchorElement>;
-  saveState: HTMLElement;
-  themeSelect: HTMLSelectElement;
-  title: HTMLHeadingElement;
 }
 
 declare global {
@@ -39,78 +64,40 @@ declare global {
   }
 }
 
-function createItem(text: string, done: boolean, idFactory: () => string): Item {
-  return { id: idFactory(), text, done };
+export function sanitizePlayerName(value: string): string {
+  const clean = value.replace(/\s+/g, " ").trim();
+  if (!clean) return "Dolphin";
+  return clean.slice(0, 18).trim();
 }
 
-export function createDefaultState(idFactory: () => string = () => crypto.randomUUID()): AppState {
-  return {
-    appName: "Cordia",
-    theme: "system",
-    items: [
-      createItem("Replace starter content", false, idFactory),
-      createItem("Add app-specific data model", false, idFactory),
-      createItem("Publish public folder to your hosting provider", true, idFactory),
-    ],
-  };
+export function normalizeScore(value: unknown): number {
+  const score = Number(value);
+  if (!Number.isFinite(score)) return 0;
+  return Math.max(0, Math.min(9999, Math.floor(score)));
 }
 
-function isTheme(value: unknown): value is Theme {
-  return value === "system" || value === "light" || value === "dark";
-}
-
-function isItem(value: unknown): value is Item {
+function isScoreEntry(value: unknown): value is ScoreEntry {
   if (!value || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
+  const entry = value as Record<string, unknown>;
   return (
-    typeof item.id === "string" &&
-    typeof item.text === "string" &&
-    typeof item.done === "boolean"
+    typeof entry.id === "string" &&
+    typeof entry.name === "string" &&
+    typeof entry.score === "number" &&
+    typeof entry.createdAt === "string"
   );
 }
 
-export function parseStoredState(storedState: string | null, defaultState: AppState): AppState {
-  if (!storedState) return defaultState;
-
-  try {
-    const parsed = JSON.parse(storedState) as Record<string, unknown>;
-    return {
-      appName: typeof parsed.appName === "string" ? parsed.appName : defaultState.appName,
-      theme: isTheme(parsed.theme) ? parsed.theme : defaultState.theme,
-      items: Array.isArray(parsed.items) && parsed.items.every(isItem) ? parsed.items : defaultState.items,
-    };
-  } catch {
-    return defaultState;
-  }
-}
-
-export function updateItem(state: AppState, id: string, patch: ItemPatch): AppState {
-  return {
-    ...state,
-    items: state.items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
-  };
-}
-
-export function removeItem(state: AppState, id: string): AppState {
-  return {
-    ...state,
-    items: state.items.filter((item) => item.id !== id),
-  };
-}
-
-export function addItem(
-  state: AppState,
-  text: string,
-  idFactory: () => string = () => crypto.randomUUID(),
-): AppState {
-  return {
-    ...state,
-    items: [createItem(text, false, idFactory), ...state.items],
-  };
-}
-
-export function clearDoneItems(state: AppState): AppState {
-  return { ...state, items: state.items.filter((item) => !item.done) };
+export function normalizeLeaderboard(value: unknown, limit = 10): ScoreEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(isScoreEntry)
+    .map((entry) => ({
+      ...entry,
+      name: sanitizePlayerName(entry.name),
+      score: normalizeScore(entry.score),
+    }))
+    .sort((left, right) => right.score - left.score || left.createdAt.localeCompare(right.createdAt))
+    .slice(0, limit);
 }
 
 function initializeGoogleAnalytics() {
@@ -137,136 +124,349 @@ function getElement<T extends Element>(selector: string, type: { new (): T }): T
 }
 
 function getElements(): AppElements {
+  const canvas = getElement("#game-canvas", HTMLCanvasElement);
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Missing 2D canvas context.");
+
   return {
-    appNameInput: getElement("#app-name", HTMLInputElement),
-    clearItemsButton: getElement("#clear-items", HTMLButtonElement),
-    itemCount: getElement("#item-count", HTMLElement),
-    itemForm: getElement("#item-form", HTMLFormElement),
-    itemInput: getElement("#item-input", HTMLInputElement),
-    itemList: getElement("#item-list", HTMLUListElement),
+    canvas,
+    context,
+    form: getElement("#player-form", HTMLFormElement),
+    nameInput: getElement("#player-name", HTMLInputElement),
+    startButton: getElement("#start-game", HTMLButtonElement),
+    statusText: getElement("#game-status", HTMLElement),
+    score: getElement("#score", HTMLElement),
+    bestScore: getElement("#best-score", HTMLElement),
+    leaderboard: getElement("#leaderboard", HTMLOListElement),
+    leaderboardStatus: getElement("#leaderboard-status", HTMLElement),
     navLinks: document.querySelectorAll<HTMLAnchorElement>(".nav a"),
-    saveState: getElement("#save-state", HTMLElement),
-    themeSelect: getElement("#theme-select", HTMLSelectElement),
-    title: getElement(".topbar h1", HTMLHeadingElement),
   };
+}
+
+function createPipe(x: number, frame: number): Pipe {
+  const wave = Math.sin(frame * 0.027) * 105;
+  const gapY = Math.round(gameConfig.height * 0.43 + wave);
+  return { x, gapY, scored: false };
+}
+
+function createGameState(bestScore = 0): GameState {
+  return {
+    status: "ready",
+    dolphinY: gameConfig.height * 0.46,
+    velocity: 0,
+    pipes: [
+      createPipe(gameConfig.width + 120, 0),
+      createPipe(gameConfig.width + 120 + gameConfig.pipeSpacing, 90),
+      createPipe(gameConfig.width + 120 + gameConfig.pipeSpacing * 2, 180),
+    ],
+    score: 0,
+    bestScore,
+    frame: 0,
+    lastRecordedScore: null,
+  };
+}
+
+function drawBackground(context: CanvasRenderingContext2D) {
+  const sky = context.createLinearGradient(0, 0, 0, gameConfig.height);
+  sky.addColorStop(0, "#87d6f4");
+  sky.addColorStop(0.62, "#d7f4ff");
+  sky.addColorStop(1, "#fbf6da");
+  context.fillStyle = sky;
+  context.fillRect(0, 0, gameConfig.width, gameConfig.height);
+
+  context.fillStyle = "rgba(255, 255, 255, 0.72)";
+  const clouds: Array<[number, number, number]> = [
+    [72, 92, 30],
+    [290, 76, 38],
+    [408, 150, 24],
+  ];
+
+  for (const cloud of clouds) {
+    context.beginPath();
+    context.arc(cloud[0], cloud[1], cloud[2], 0, Math.PI * 2);
+    context.arc(cloud[0] + cloud[2] * 0.9, cloud[1] + 7, cloud[2] * 0.78, 0, Math.PI * 2);
+    context.arc(cloud[0] - cloud[2] * 0.9, cloud[1] + 9, cloud[2] * 0.66, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  context.fillStyle = "#1b8876";
+  context.fillRect(0, gameConfig.height - gameConfig.floorHeight, gameConfig.width, gameConfig.floorHeight);
+  context.fillStyle = "#f3d277";
+  context.fillRect(0, gameConfig.height - gameConfig.floorHeight, gameConfig.width, 18);
+}
+
+function drawPipe(context: CanvasRenderingContext2D, pipe: Pipe) {
+  const topHeight = pipe.gapY - gameConfig.pipeGap / 2;
+  const bottomY = pipe.gapY + gameConfig.pipeGap / 2;
+  const bottomHeight = gameConfig.height - gameConfig.floorHeight - bottomY;
+
+  context.fillStyle = "#0e8f83";
+  context.fillRect(pipe.x, 0, gameConfig.pipeWidth, topHeight);
+  context.fillRect(pipe.x, bottomY, gameConfig.pipeWidth, bottomHeight);
+  context.fillStyle = "#0a685f";
+  context.fillRect(pipe.x - 6, topHeight - 22, gameConfig.pipeWidth + 12, 22);
+  context.fillRect(pipe.x - 6, bottomY, gameConfig.pipeWidth + 12, 22);
+}
+
+function drawDolphin(context: CanvasRenderingContext2D, state: GameState) {
+  const x = gameConfig.dolphinX;
+  const y = state.dolphinY;
+  const tilt = Math.max(-0.45, Math.min(0.7, state.velocity / 10));
+
+  context.save();
+  context.translate(x, y);
+  context.rotate(tilt);
+  context.fillStyle = "#2f7fd2";
+  context.beginPath();
+  context.ellipse(0, 0, 31, 19, 0, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = "#8cd6ff";
+  context.beginPath();
+  context.ellipse(7, 7, 17, 8, 0, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = "#1d5ea0";
+  context.beginPath();
+  context.moveTo(-28, -2);
+  context.lineTo(-51, -18);
+  context.lineTo(-42, 2);
+  context.lineTo(-52, 19);
+  context.closePath();
+  context.fill();
+  context.fillStyle = "#19528d";
+  context.beginPath();
+  context.moveTo(0, -17);
+  context.lineTo(-10, -38);
+  context.lineTo(14, -18);
+  context.closePath();
+  context.fill();
+  context.fillStyle = "#0b1720";
+  context.beginPath();
+  context.arc(18, -6, 3.2, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+}
+
+function drawGame(context: CanvasRenderingContext2D, state: GameState) {
+  context.clearRect(0, 0, gameConfig.width, gameConfig.height);
+  drawBackground(context);
+  state.pipes.forEach((pipe) => drawPipe(context, pipe));
+  drawDolphin(context, state);
+
+  if (state.status !== "playing") {
+    context.fillStyle = "rgba(11, 23, 32, 0.54)";
+    context.fillRect(0, 0, gameConfig.width, gameConfig.height);
+    context.fillStyle = "#ffffff";
+    context.textAlign = "center";
+    context.font = "800 34px system-ui, sans-serif";
+    context.fillText(state.status === "ready" ? "Tap to flap" : "Splash down", gameConfig.width / 2, 280);
+    context.font = "700 17px system-ui, sans-serif";
+    context.fillText("Space, click, or tap", gameConfig.width / 2, 316);
+  }
+}
+
+function pipeHitsDolphin(pipe: Pipe, dolphinY: number): boolean {
+  const radius = gameConfig.dolphinRadius;
+  const dolphinLeft = gameConfig.dolphinX - radius;
+  const dolphinRight = gameConfig.dolphinX + radius;
+  const pipeLeft = pipe.x;
+  const pipeRight = pipe.x + gameConfig.pipeWidth;
+  if (dolphinRight < pipeLeft || dolphinLeft > pipeRight) return false;
+
+  const gapTop = pipe.gapY - gameConfig.pipeGap / 2;
+  const gapBottom = pipe.gapY + gameConfig.pipeGap / 2;
+  return dolphinY - radius < gapTop || dolphinY + radius > gapBottom;
+}
+
+function updateGame(state: GameState): GameState {
+  if (state.status !== "playing") return state;
+
+  const floorY = gameConfig.height - gameConfig.floorHeight;
+  const nextFrame = state.frame + 1;
+  const dolphinY = state.dolphinY + state.velocity;
+  const velocity = state.velocity + gameConfig.gravity;
+  let score = state.score;
+  let pipes = state.pipes.map((pipe) => ({ ...pipe, x: pipe.x - gameConfig.pipeSpeed }));
+
+  const firstPipe = pipes[0];
+  if (firstPipe && firstPipe.x + gameConfig.pipeWidth < -12) {
+    const lastX = pipes[pipes.length - 1]?.x ?? gameConfig.width;
+    pipes = [...pipes.slice(1), createPipe(lastX + gameConfig.pipeSpacing, nextFrame)];
+  }
+
+  pipes = pipes.map((pipe) => {
+    if (!pipe.scored && pipe.x + gameConfig.pipeWidth < gameConfig.dolphinX) {
+      score += 1;
+      return { ...pipe, scored: true };
+    }
+    return pipe;
+  });
+
+  const crashed =
+    dolphinY - gameConfig.dolphinRadius < 0 ||
+    dolphinY + gameConfig.dolphinRadius > floorY ||
+    pipes.some((pipe) => pipeHitsDolphin(pipe, dolphinY));
+
+  return {
+    ...state,
+    status: crashed ? "ended" : "playing",
+    dolphinY,
+    velocity,
+    pipes,
+    score,
+    bestScore: Math.max(state.bestScore, score),
+    frame: nextFrame,
+  };
+}
+
+async function fetchLeaderboard(): Promise<ScoreEntry[]> {
+  const response = await fetch("/api/scores", { headers: { accept: "application/json" } });
+  if (!response.ok) throw new Error("Scoreboard unavailable.");
+  const body = (await response.json()) as { scores?: unknown };
+  return normalizeLeaderboard(body.scores);
+}
+
+async function postScore(name: string, score: number): Promise<ScoreEntry[]> {
+  const response = await fetch("/api/scores", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ name: sanitizePlayerName(name), score: normalizeScore(score) }),
+  });
+  if (!response.ok) throw new Error("Score save failed.");
+  const body = (await response.json()) as { scores?: unknown };
+  return normalizeLeaderboard(body.scores);
+}
+
+function renderLeaderboard(elements: AppElements, scores: ScoreEntry[]) {
+  elements.leaderboard.replaceChildren();
+
+  if (scores.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "empty-score";
+    empty.textContent = "No scores yet";
+    elements.leaderboard.append(empty);
+    return;
+  }
+
+  scores.forEach((entry) => {
+    const row = document.createElement("li");
+    const name = document.createElement("span");
+    const score = document.createElement("strong");
+    const date = document.createElement("time");
+    name.textContent = entry.name;
+    score.textContent = String(entry.score);
+    date.dateTime = entry.createdAt;
+    date.textContent = new Date(entry.createdAt).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+    row.append(name, score, date);
+    elements.leaderboard.append(row);
+  });
 }
 
 function initializeApp() {
   initializeGoogleAnalytics();
 
-  const defaultState = createDefaultState();
   const elements = getElements();
-  let state = parseStoredState(localStorage.getItem(storageKey), defaultState);
-  let saveTimer: number | undefined;
+  const storedName = localStorage.getItem(playerNameKey);
+  if (storedName) elements.nameInput.value = sanitizePlayerName(storedName);
 
-  function saveState() {
-    localStorage.setItem(storageKey, JSON.stringify(state));
-    elements.saveState.textContent = "Saved locally";
-    window.clearTimeout(saveTimer);
-    saveTimer = window.setTimeout(() => {
-      elements.saveState.textContent = "Changes autosave";
-    }, 1600);
-  }
-
-  function applyTheme() {
-    document.documentElement.dataset.theme = state.theme;
-  }
-
-  function renderItems() {
-    elements.itemList.replaceChildren();
-
-    if (state.items.length === 0) {
-      const emptyState = document.createElement("p");
-      emptyState.className = "empty-state";
-      emptyState.textContent = "No items yet. Add one to start shaping this template.";
-      elements.itemList.append(emptyState);
-      return;
-    }
-
-    state.items.forEach((item) => {
-      const row = document.createElement("li");
-      row.className = "item-row";
-      row.dataset.done = String(item.done);
-
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = item.done;
-      checkbox.ariaLabel = `Mark ${item.text} complete`;
-      checkbox.addEventListener("change", () => {
-        state = updateItem(state, item.id, { done: checkbox.checked });
-        saveState();
-        render();
-      });
-
-      const label = document.createElement("span");
-      label.textContent = item.text;
-
-      const removeButton = document.createElement("button");
-      removeButton.className = "icon-button";
-      removeButton.type = "button";
-      removeButton.ariaLabel = `Remove ${item.text}`;
-      removeButton.textContent = "x";
-      removeButton.addEventListener("click", () => {
-        state = removeItem(state, item.id);
-        saveState();
-        render();
-      });
-
-      row.append(checkbox, label, removeButton);
-      elements.itemList.append(row);
-    });
-  }
+  let leaderboard: ScoreEntry[] = [];
+  let state = createGameState();
+  let animationId = 0;
 
   function render() {
-    document.title = `${state.appName} App Template`;
-    elements.title.textContent = state.appName;
-    elements.appNameInput.value = state.appName;
-    elements.themeSelect.value = state.theme;
-    elements.itemCount.textContent = String(state.items.length);
-    applyTheme();
-    renderItems();
+    elements.score.textContent = String(state.score);
+    elements.bestScore.textContent = String(state.bestScore);
+    elements.statusText.textContent =
+      state.status === "playing"
+        ? "Keep swimming"
+        : state.status === "ready"
+          ? "Ready"
+          : `Finished with ${state.score}`;
+    elements.startButton.textContent = state.status === "playing" ? "Flap" : "Start";
+    drawGame(elements.context, state);
+  }
+
+  async function refreshLeaderboard(message = "Loading scores") {
+    elements.leaderboardStatus.textContent = message;
+    try {
+      leaderboard = await fetchLeaderboard();
+      renderLeaderboard(elements, leaderboard);
+      elements.leaderboardStatus.textContent = "Global scores";
+    } catch {
+      renderLeaderboard(elements, leaderboard);
+      elements.leaderboardStatus.textContent = "Scores offline";
+    }
+  }
+
+  async function recordFinishedScore() {
+    if (state.status !== "ended" || state.lastRecordedScore === state.score) return;
+    state = { ...state, lastRecordedScore: state.score };
+    elements.leaderboardStatus.textContent = "Saving score";
+    try {
+      const scores = await postScore(elements.nameInput.value, state.score);
+      leaderboard = scores;
+      renderLeaderboard(elements, leaderboard);
+      elements.leaderboardStatus.textContent = "Score saved";
+    } catch {
+      elements.leaderboardStatus.textContent = "Score not saved";
+    }
+  }
+
+  function tick() {
+    state = updateGame(state);
+    render();
+    if (state.status === "ended") {
+      void recordFinishedScore();
+    }
+    animationId = window.requestAnimationFrame(tick);
+  }
+
+  function flap() {
+    const cleanName = sanitizePlayerName(elements.nameInput.value);
+    elements.nameInput.value = cleanName;
+    localStorage.setItem(playerNameKey, cleanName);
+
+    if (state.status === "ready" || state.status === "ended") {
+      state = createGameState(state.bestScore);
+      state.status = "playing";
+    }
+    state = { ...state, velocity: gameConfig.jumpVelocity };
+    render();
   }
 
   function updateCurrentNavLink() {
-    const currentHash = window.location.hash || "#overview";
+    const currentHash = window.location.hash || "#play";
     elements.navLinks.forEach((link) => {
       link.setAttribute("aria-current", link.getAttribute("href") === currentHash ? "page" : "false");
     });
   }
 
-  elements.itemForm.addEventListener("submit", (event) => {
+  elements.form.addEventListener("submit", (event) => {
     event.preventDefault();
-    const text = elements.itemInput.value.trim();
-    if (!text) return;
-    state = addItem(state, text);
-    saveState();
-    render();
-    elements.itemInput.value = "";
-    elements.itemInput.focus();
+    flap();
   });
 
-  elements.clearItemsButton.addEventListener("click", () => {
-    state = clearDoneItems(state);
-    saveState();
-    render();
+  elements.startButton.addEventListener("click", flap);
+  elements.canvas.addEventListener("pointerdown", flap);
+  window.addEventListener("keydown", (event) => {
+    if (event.code === "Space" || event.code === "ArrowUp") {
+      event.preventDefault();
+      flap();
+    }
   });
-
-  elements.appNameInput.addEventListener("input", () => {
-    state = { ...state, appName: elements.appNameInput.value.trim() || "Cordia" };
-    saveState();
-    render();
-  });
-
-  elements.themeSelect.addEventListener("change", () => {
-    state = { ...state, theme: elements.themeSelect.value as Theme };
-    saveState();
-    render();
-  });
-
   window.addEventListener("hashchange", updateCurrentNavLink);
+  window.addEventListener("pagehide", () => window.cancelAnimationFrame(animationId));
 
+  renderLeaderboard(elements, leaderboard);
   render();
   updateCurrentNavLink();
+  void refreshLeaderboard();
+  animationId = window.requestAnimationFrame(tick);
 }
 
 if (typeof document !== "undefined") {

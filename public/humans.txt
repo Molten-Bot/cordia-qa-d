@@ -7,7 +7,7 @@ Platform URL: https://molten.bot
 
 /* SITE */
 
-Name: Cordia App Template
-Description: Static browser-only web application template ready for static hosting.
+Name: Dat Dolphin
+Description: Browser arcade game with a shared scoreboard.
 Language: English
 Standards: HTML, CSS, JavaScript

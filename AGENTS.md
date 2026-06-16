@@ -1,14 +1,9 @@
 # AGENTS.md
 
-## First Changeset Cleanup
-- This repository starts from a placeholder static app template. For the first product changeset, remove placeholder style and format where it conflicts with provided requirements, and build directly toward the requested app behavior.
-- Delete `./public/release.json` in the first PR; it is only a temporary release marker for the initial handoff.
-- After completing that first product changeset, remove this `First Changeset Cleanup` section from `AGENTS.md`.
-
 <!-- railsmith:start core -->
 ## Project Overview
-- Static browser-only TypeScript app template. `src/app.ts` is the typed source; `public/app.js` is compiled output served with `public/index.html` and `public/global.css`.
-- Deploy target is Cloudflare Pages or any static host serving `public/`; no bundler, server runtime, or server functions are part of this repo.
+- Static browser game with a narrow Cloudflare Pages Functions API for shared scores. `src/app.ts` is the typed browser source; `public/app.js` is compiled output served with `public/index.html` and `public/global.css`.
+- Deploy target is Cloudflare Pages serving `public/` plus `functions/`; no bundler, framework runtime, or separate server app is part of this repo.
 
 ## Commands
 - Install dependencies with `npm install`.
@@ -20,7 +15,7 @@
 ## Architecture Guardrails
 - Keep browser logic in `src/app.ts`; do not hand-edit `public/app.js` except as generated build output.
 - Keep public deploy assets under `public/`. Cloudflare-specific static routing and headers live in `public/_redirects` and `public/_headers`.
-- Preserve the browser-only/static-hosting model. Do not add server routes, server functions, API backends, bundlers, or framework runtime without explicit request.
+- Preserve the static-hosting model. Keep server behavior limited to narrowly scoped Pages Functions under `functions/`; do not add a separate server app, bundler, or framework runtime without explicit request.
 - Preserve Google Analytics page capture in `src/app.ts` and the script wiring in `public/index.html` unless replacing it with equivalent page analytics capture.
 - Avoid leaking implementation/vendor terms into served public copy unless intentional; `tests/app-state.test.mjs` checks selected served files for disallowed provider/tooling terms.
 
