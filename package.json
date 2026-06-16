@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "lint": "tsc --noEmit",
-    "test": "npm run build && node --test tests/*.test.mjs"
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "dev:storage": "npm run build && npx wrangler@4.95.0 pages dev public --r2=STORAGE"
   },
   "devDependencies": {
     "typescript": "^5.8.3"
