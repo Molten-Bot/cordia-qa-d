@@ -32,3 +32,17 @@
 - Keep static security headers in `public/_headers` when changing deploy assets; review them when adding capabilities that need browser permissions or external resources.
 - Do not commit secrets, tokens, private keys, or generated credentials. This template should not require runtime secrets.
 <!-- railsmith:end core -->
+
+<!-- cordia:storage:start -->
+## Storage
+
+This project has Cloudflare R2 storage enabled through the server-side `STORAGE` binding. Treat `context.env["STORAGE"]` as the storage connection object; Cordia does not generate or store app-facing storage credentials.
+
+Access storage only from server-side API routes or Pages Functions via `context.env["STORAGE"]` or the framework's server env context. Browser/client code must call those server-side APIs; it must not touch storage directly.
+
+Cordia added `functions/_lib/cordia-storage.js` and `functions/api/storage/health.js` as the standard storage starting point. Use the helper to validate keys and read/write JSON from app-specific API routes.
+
+Do not expose a generic public bucket browser. Add narrowly scoped routes for the app's data model, validate input, keep object keys under predictable prefixes, and enforce whatever authentication or write rules the app needs before writing data.
+
+Never request, share, commit, log, or expose storage credentials. Do not put storage secrets in `PUBLIC_*` variables, client bundles, Hub prompts, PR descriptions, generated docs, screenshots, or console output.
+<!-- cordia:storage:end -->
