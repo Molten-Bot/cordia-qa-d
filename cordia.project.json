@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "generatedBy": "cordia",
+  "updatedAt": "2026-06-16T17:56:46.267Z",
+  "project": {
+    "id": "d",
+    "handle": "d",
+    "title": "Dat Dolphin",
+    "summary": "We need a flappy bird clone, when the player finished their score is recorded through an API and stored in persistent storage for all to see!",
+    "url": "https://cordia.molten-qa.site/project/d"
+  },
+  "repo": {
+    "owner": "Molten-Bot",
+    "name": "cordia-qa-d",
+    "fullName": "Molten-Bot/cordia-qa-d"
+  }
+}
